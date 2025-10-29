@@ -1,2 +1,2 @@
-# simulateur-cr-dit-
+# simulateur-credit-
 MONTANT REMBOURSÉ SUITE CREDIT IMMOBLIET OU CONSOMATION 
