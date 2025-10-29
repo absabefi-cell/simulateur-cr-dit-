@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Crédit – Traite fixe (VPM + assurance)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#0b1220; --line:#1f2937;
+    --muted:#9ca3af; --text:#e5e7eb; --accent:#22d3ee; --ok:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
+    background:var(--bg);color:var(--text);}
+  header{padding:14px 16px;background:#0b1220;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:clamp(16px,4.5vw,20px)}
+  .badge{font-size:12px;color:#001018;background:var(--accent);padding:3px 8px;border-radius:999px}
+
+  main{max-width:1000px;margin:0 auto;padding:12px 10px 80px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));
+    border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+  .card h2{margin:.2rem 0 .6rem;font-size:clamp(16px,4.2vw,18px)}
+
+  /* Champs : label + input côte à côte */
+  .row{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}
+  .row>div{
+    flex:1 1 45%;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .row>div label{flex:1;font-size:14px;color:var(--muted);margin:0}
+  .row>div input,.row>div select{
+    flex:1;text-align:right;padding:8px 10px;border-radius:8px;border:1px solid #233040;
+    background:#0b1220;color:var(--text);font-size:15px;max-width:170px;
+  }
+  @media(max-width:480px){.row>div{flex:1 1 100%}}
+
+  .btn{padding:12px 14px;border-radius:12px;border:1px solid var(--line);
+    cursor:pointer;background:#111827;color:var(--text);font-size:15px;}
+  .btn-accent{background:linear-gradient(90deg,#06b6d4,#22d3ee);color:#001018;border:none}
+  .btn-wrap{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .pill{display:flex;justify-content:space-between;padding:12px 14px;border:1px solid #233040;
+    border-radius:12px;background:var(--panel);font-size:14px}
+  .pill strong{color:var(--ok)}
+  .result{display:grid;gap:8px;margin-top:10px}
+  @media(min-width:560px){.result{grid-template-columns:1fr 1fr}}
+
+  /* Tableau amortissement */
+  #tableWrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+  table{border-collapse:collapse;width:100%;min-width:780px;font-size:13.5px;border-spacing:0}
+  thead th{background:#0b1220;border-bottom:1px solid var(--line);
+    padding:6px 8px;text-align:right;white-space:nowrap}
+  thead th:first-child,tbody td:first-child{text-align:center}
+  tbody td{border-bottom:1px dashed #1f2937;padding:5px 8px;text-align:right;white-space:nowrap}
+
+  /* Graphe : toujours dans les bornes de l’écran */
+  #graphCard{
+    display:none;
+    overflow:hidden;           /* empêche tout dépassement visuel */
+  }
+  #graphContainer{
+    width:100%;
+    max-width:100vw;           /* jamais plus large que l’écran */
+    height:50vh;               /* confortable en portrait */
+  }
+  canvas{
+    width:100% !important;
+    height:100% !important;    /* on laisse Chart.js remplir le conteneur */
+    border-radius:12px;
+    display:block;
+  }
+  @media (orientation: landscape){
+    #graphContainer{ height:80vh; } /* utilise mieux l’espace en paysage */
+  }
+</style>
+</head>
+
+<body>
+<header>
+  <h1>Crédit – Traite fixe (VPM + assurance)</h1>
+  <span class="badge">Mobile</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Paramètres</h2>
+    <div class="row">
+      <div><label>Capital emprunté</label><input id="capital" type="number" value="580000" step="100"></div>
+      <div><label>Durée (mois)</label><input id="mois" type="number" value="108" step="1"></div>
+    </div>
+    <div class="row">
+      <div><label>Taux annuel (%)</label><input id="tauxAnnuel" type="number" value="4.2" step="0.01"></div>
+      <div><label>Taxe sur intérêts (%)</label><input id="taxe" type="number" value="10" step="0.01"></div>
+    </div>
+    <div class="row">
+      <div><label>Assurance mensuelle</label><input id="assurance" type="number" value="0.00067" step="0.00001"></div>
+      <div>
+        <label>Traite tout-compris ?</label>
+        <select id="mode">
+          <option value="fixeIncluse" selected>Oui (taxe+assur)</option>
+          <option value="horsAssur">Non (séparées)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="showMad" />
+        <label for="showMad" style="margin:0;">Afficher devise MAD</label>
+      </div>
+      <div>
+        <label>Affichage</label>
+        <select id="viewMode">
+          <option value="table" selected>Tableau d’amortissement</option>
+          <option value="graph">Graphe (Intérêt vs Capital)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btn-wrap">
+      <button class="btn btn-accent" id="calcBtn">Recalculer</button>
+      <button class="btn" id="excelBtn">Télécharger Excel</button>
+    </div>
+
+    <div class="result">
+      <div class="pill"><span>Traite fixe</span><strong id="traite">–</strong></div>
+      <div class="pill"><span>Taux mensuel utilisé</span><strong id="rMens">–</strong></div>
+    </div>
+  </section>
+
+  <!-- Tableau -->
+  <section class="card" id="tableCard">
+    <h2>Amortissement</h2>
+    <div id="tableWrap"></div>
+  </section>
+
+  <!-- Graphe -->
+  <section class="card" id="graphCard">
+    <h2>Graphe – Intérêt HT et Capital remboursé</h2>
+    <div id="graphContainer">
+      <canvas id="amortChart"></canvas>
+    </div>
+  </section>
+</main>
+
+<!-- Chart.js pour le graphe -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- SheetJS pour l’export XLSX -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+
+<script>
+(function(){
+  /* ====== État ====== */
+  let showMAD = false;
+  let chart = null;
+
+  /* ====== Formatage ====== */
+  const fmtNumber = new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtPct    = new Intl.NumberFormat('fr-FR', { style: 'percent', minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const $ = id => document.getElementById(id);
+  const num2 = n => Number(n.toFixed(2));
+
+  /* ====== VPM ====== */
+  function vpm(r, n, pv){
+    if (r === 0) return -pv / n;
+    const pow = (1 + r) ** n;
+    return -(r * pv * pow) / (pow - 1);
+  }
+
+  /* ====== Bip ====== */
+  function playBeep() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine"; osc.frequency.value = 550; gain.gain.value = 0.12;
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.15);
+  }
+
+  /* ====== Calcul & rendu ====== */
+  function calc(){
+    const C = +$("capital").value;
+    const n = +$("mois").value;
+    const taux = +$("tauxAnnuel").value / 100 / 12; // intérêt HT mensuel
+    const taxe = +$("taxe").value / 100;
+    const assur = +$("assurance").value;
+    const mode = $("mode").value;
+
+    let r = taux;
+    if (mode === "fixeIncluse") r = taux * (1 + taxe) + assur;
+
+    const mens = -vpm(r, n, C);
+    $("traite").textContent = fmtNumber.format(mens) + (showMAD ? " MAD" : "");
+    $("rMens").textContent  = fmtPct.format(r);
+
+    let solde = C;
+    const rows = [];
+    for (let i = 1; i <= n; i++){
+      const inter = solde * taux;
+      const tx    = inter * taxe;
+      const as    = solde * assur;
+      const pay   = (mode === "fixeIncluse") ? mens : (mens + tx + as);
+      const cap   = pay - (inter + tx + as);
+      const debut = solde;
+      solde -= cap;
+      rows.push({ i, solde: debut, int: inter, tax: tx, ass: as, cap, rest: solde, pay });
+    }
+    renderTable(rows);
+    renderChart(rows);
+    return rows;
+  }
+
+  function renderTable(rows){
+    const wrap = $("tableWrap");
+    const f = v => fmtNumber.format(v) + (showMAD ? " MAD" : "");
+    let html = `<table><thead><tr>
+      <th>Mois</th><th>Solde debut</th><th>Interet HT</th><th>Taxe</th>
+      <th>Assurance</th><th>Capital remb.</th><th>Solde fin</th><th>Mensualite</th>
+    </tr></thead><tbody>`;
+    rows.forEach(r => {
+      html += `<tr>
+        <td>${r.i}</td>
+        <td>${f(r.solde)}</td>
+        <td>${f(r.int)}</td>
+        <td>${f(r.tax)}</td>
+        <td>${f(r.ass)}</td>
+        <td>${f(r.cap)}</td>
+        <td>${f(r.rest)}</td>
+        <td>${f(r.pay)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    wrap.innerHTML = html;
+  }
+
+  /* ====== Graphe borné à l’écran ====== */
+  function renderChart(rows){
+    const labels = rows.map(r => r.i);
+    const inters = rows.map(r => +num2(r.int));
+    const caps   = rows.map(r => +num2(r.cap));
+
+    const ctx = $("amortChart").getContext("2d");
+
+    const gridColor = "#1f2937";
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text') || "#e5e7eb";
+
+    const tooltipLabel = (label, value) =>
+      `${label}: ${fmtNumber.format(value)}${showMAD ? " MAD" : ""}`;
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,  // on remplit #graphContainer
+      animation: false,            // plus fluide sur mobile
+      layout: { padding: 8 },
+      clip: false,                 // évite que les tooltips déclenchent des overflow
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          grid: { color: gridColor },
+          ticks: { color: textColor }
+        },
+        y: {
+          position: "left",
+          grid: { color: gridColor },
+          ticks: {
+            color: textColor,
+            callback: v => fmtNumber.format(v)
+          }
+        },
+        y1: {
+          position: "right",
+          grid: { drawOnChartArea: false },
+          ticks: {
+            color: textColor,
+            callback: v => fmtNumber.format(v)
+          }
+        }
+      },
+      plugins: {
+        legend: { labels: { color: textColor } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => tooltipLabel(ctx.dataset.label, ctx.parsed.y)
+          }
+        }
+      }
+    };
+
+    const data = {
+      labels,
+      datasets: [
+        { label: "Capital remboursé", data: caps,   yAxisID: "y",  tension: 0.25, borderWidth: 2, pointRadius: 0 },
+        { label: "Intérêt HT",        data: inters, yAxisID: "y1", tension: 0.25, borderWidth: 2, pointRadius: 0 }
+      ]
+    };
+
+    if (!chart){
+      chart = new Chart(ctx, { type: "line", data, options });
+    }else{
+      chart.data = data;
+      chart.options = options;
+      chart.update();
+    }
+  }
+
+  /* ====== Export: XLSX + fallback CSV ====== */
+  function rowsToAOA(rows){
+    const header = ["Mois","Solde debut","Interet HT","Taxe","Assurance","Capital remb.","Solde fin","Mensualite"];
+    const data = rows.map(r => [
+      r.i, num2(r.solde), num2(r.int), num2(r.tax), num2(r.ass), num2(r.cap), num2(r.rest), num2(r.pay)
+    ]);
+    return [header, ...data];
+  }
+
+  function downloadCSVFallback(rows){
+    const header = "Mois;Solde debut;Interet HT;Taxe;Assurance;Capital remb.;Solde fin;Mensualite";
+    const body = rows.map(r => [
+      r.i,
+      r.solde.toFixed(2).replace('.', ','),
+      r.int.toFixed(2).replace('.', ','),
+      r.tax.toFixed(2).replace('.', ','),
+      r.ass.toFixed(2).replace('.', ','),
+      r.cap.toFixed(2).replace('.', ','),
+      r.rest.toFixed(2).replace('.', ','),
+      r.pay.toFixed(2).replace('.', ',')
+    ].join(';')).join('\n');
+    const blob = new Blob([header + "\n" + body], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "amortissement.csv";
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }
+
+  function exportExcel(rows){
+    try{
+      const aoa = rowsToAOA(rows);
+      const ws  = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [5,12,12,10,11,13,12,12].map(w => ({ wch: w }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Amortissement");
+      XLSX.writeFileXLSX(wb, "amortissement.xlsx");
+    }catch(e){
+      console.warn("XLSX bloqué, fallback CSV:", e);
+      alert("Le téléchargement Excel est bloqué par le navigateur.\nJe génère un fichier CSV compatible Excel.");
+      downloadCSVFallback(rows);
+    }
+  }
+
+  /* ====== Actions ====== */
+  $("calcBtn").onclick = () => { playBeep(); calc(); };
+
+  $("excelBtn").onclick = () => exportExcel(calc());
+
+  $("showMad").onchange = (e) => { showMAD = e.target.checked; calc(); };
+
+  $("viewMode").onchange = (e) => {
+    const mode = e.target.value;
+    $("tableCard").style.display = (mode === "table") ? "block" : "none";
+    $("graphCard").style.display = (mode === "graph") ? "block" : "none";
+    if (mode === "graph") {
+      // recalcul + redimension immédiat du graphe
+      const rows = calc();
+      // si l’API d’orientation est dispo, on peut tenter le paysage (silencieux si refusé)
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("landscape").catch(()=>{});
+      }
+      // Forcer un reflow si nécessaire (certains mobiles)
+      requestAnimationFrame(() => { if (chart) chart.resize(); });
+    }
+  };
+
+  // Adapter le graphe quand l’utilisateur tourne l’écran
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => { if (chart) chart.resize(); }, 200);
+  });
+
+  /* Init */
+  calc();
+})();
+</script>
+</body>
+</html>
